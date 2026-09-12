@@ -1,0 +1,10 @@
+waiting for an active print (up to ~40min)...
+=== ACTIVE state=PRINTING ===
+--- /api/v1/job ---
+{"id":126,"state":"PRINTING","progress":0.00,"time_remaining":600,"time_printing":1,"file":{"refs":{"icon":"/thumb/s/usb/2230-T~3.BGC","thumbnail":"/thumb/l/usb/2230-T~3.BGC","download":"/usb/2230-T~3.BGC"},"name":"2230-T~3.BGC","display_name":"2230-to-2242-adapter(1)_0.4n_0.1mm_PLA_MK4IS_11m.bgcode","path":"/usb","size":0,"m_timestamp":1789250664}}
+--- /api/job (legacy) ---
+{"state":"Printing","job":{"estimatedPrintTime":601,"file":{"name":"2230-to-2242-adapter(1)_0.4n_0.1mm_PLA_MK4IS_11m.bgcode","path":"/usb/2230-T~3.BGC","display":"2230-to-2242-adapter(1)_0.4n_0.1mm_PLA_MK4IS_11m.bgcode"}},"progress":{"printTimeLeft":600,"completion":0.00,"printTime":1}}
+--- /api/printer (legacy) ---
+{"telemetry":{"temp-bed":25.8,"temp-nozzle":170.0,"print-speed":100,"z-height":40.0,"material":"PLA"},"temperature":{"tool0":{"actual":170.0,"target":170.0,"display":170.0,"offset":0},"bed":{"actual":25.8,"target":60.0,"offset":0}},"state":{"text":"Printing","flags":{"link_state":"PRINTING","operational":false,"paused":false,"printing":true,"cancelling":false,"pausing":false,"error":false,"sdReady":false,"closedOnError":false,"ready":false,"busy":false}}}
+--- /api/v1/status ---
+{"job":{"id":126,"progress":0.00,"time_remaining":600,"time_printing":1},"storage":{"path":"/usb/","name":"usb","read_only":false},"printer":{"state":"PRINTING","temp_bed":25.8,"target_bed":60.0,"temp_nozzle":170.0,"target_nozzle":170.0,"axis_z":40.0,"flow":100,"speed":100,"fan_hotend":3383,"fan_print":0}}
