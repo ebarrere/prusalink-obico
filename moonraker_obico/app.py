@@ -352,6 +352,16 @@ class App(object):
             self.server_conn.post_status_update_to_server()
             return
 
+        # PrusaLink fork: register a fresh print whenever we're PRINTING but have
+        # no current print yet. Covers starts that pass through ATTENTION/PAUSED/
+        # BUSY (e.g. a no-filament prompt), not just the clean OPERATIONAL->PRINTING
+        # edge — otherwise current_print_ts stays -1 and the server never watches.
+        if cur_state == PrinterState.STATE_PRINTING and printer_state.current_print_ts in (None, -1):
+            self.set_current_print(printer_state)
+            if printer_state.current_print_ts not in (None, -1):
+                self.post_print_event(PrinterState.EVENT_STARTED)
+            return
+
         if printer_state.current_print_ts is None:
             # This should cover all the edge cases when there is an active job, but current_print_ts is not set,
             # e.g., moonraker-obico is restarted in the middle of a print
