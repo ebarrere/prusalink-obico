@@ -110,8 +110,16 @@ class PrusaLinkConn:
         try:
             status = self._get('/api/v1/status')
         except Exception:
-            _logger.warning('PrusaLink status poll failed; marking disconnected')
-            self.push_event(Event(sender=self.id, name='mr_disconnected', data={}))
+            # Printer powered off / PrusaLink unreachable. Report the PRINTER as
+            # offline (webhooks.state != 'ready') rather than emitting
+            # 'mr_disconnected' (which clears state -> empty status -> Obico shows
+            # the *plugin* offline). This keeps the agent online with the printer
+            # shown offline, matching moonraker-obico when Klipper is off.
+            self._cur_job_id = None
+            self.push_event(Event(
+                sender=self.id, name='status_update',
+                data={'result': {'status': self._offline_status()}},
+            ))
             return
         try:
             klipper_status = self._translate(status)
@@ -121,6 +129,28 @@ class PrusaLinkConn:
             ))
         except Exception:
             self.sentry.captureException()
+
+    def _offline_status(self):
+        # webhooks.state != 'ready' -> get_state_from_status() => Offline.
+        return {
+            'webhooks': {'state': 'offline', 'state_message': 'PrusaLink unreachable (printer powered off?)'},
+            'print_stats': {
+                'state': 'standby', 'filename': '', 'message': '',
+                'print_duration': 0.0, 'total_duration': 0.0, 'filament_used': 0.0,
+                'info': {'total_layer': None, 'current_layer': None},
+            },
+            'virtual_sdcard': {'progress': 0.0, 'file_position': 0, 'is_active': False},
+            'display_status': {'progress': 0.0, 'message': None},
+            'gcode_move': {
+                'speed_factor': 1.0, 'extrude_factor': 1.0,
+                'gcode_position': [0, 0, 0], 'absolute_coordinates': True,
+                'homing_origin': [0, 0, 0, 0],
+            },
+            'toolhead': {'position': [0, 0, 0, 0], 'homed_axes': ''},
+            'fan': {'speed': 0.0},
+            'extruder': {'temperature': 0.0, 'target': 0.0},
+            'heater_bed': {'temperature': 0.0, 'target': 0.0},
+        }
 
     def _translate(self, status):
         printer = status.get('printer', {}) or {}
