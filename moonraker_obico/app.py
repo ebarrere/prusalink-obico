@@ -343,7 +343,12 @@ class App(object):
             )
 
         if cur_state == PrinterState.STATE_OFFLINE:
-            printer_state.set_current_print_ts(None)  # Offline means actually printing status unknown. It may or may not be printing.
+            # PrusaLink fork: the printer's PrusaLink API is on the printer, so
+            # "offline" means it's powered off (definitely not printing) while our
+            # always-on agent keeps reporting. Use -1 (not None) so to_dict sends a
+            # real Offline status heartbeat -> the plugin stays ONLINE and the
+            # printer shows Offline, instead of an empty {} that reads as plugin-offline.
+            printer_state.set_current_print_ts(-1)
             self.server_conn.post_status_update_to_server()
             return
 
