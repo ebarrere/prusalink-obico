@@ -182,7 +182,23 @@ class PrinterState:
             filename = pathlib.Path(filepath).name if filepath else None
 
             if state == PrinterState.STATE_OFFLINE:
-                return {}
+                # PrusaLink fork: return a real status (with _ts) instead of {} so
+                # the Obico server caches it and shows the PRINTER offline, rather
+                # than deleting the cached status (which reads as the PLUGIN being
+                # offline). Our agent stays up even when the printer is powered off.
+                return {
+                    '_ts': time.time(),
+                    'state': {
+                        'text': state,
+                        'flags': {
+                            'operational': False, 'paused': False, 'printing': False,
+                            'cancelling': False, 'pausing': False, 'error': False,
+                            'ready': False, 'closedOrError': False,
+                        },
+                        'error': None,
+                    },
+                    'temperatures': temps,
+                }
 
             completion, print_time, print_time_left = self.get_time_info()
             current_z, max_z, total_layers, current_layer = self.get_z_info()
