@@ -1,4 +1,13 @@
-__pycache__/
 *.pyc
-.venv/
-*.cfg.local
+*.swp
+.idea
+.vscode
+*.iml
+build
+dist
+*.egg*
+.DS_Store
+test_cfgs
+venv
+core
+core.*

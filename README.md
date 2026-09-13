@@ -1,65 +1,50 @@
 # prusalink-obico
 
-A fork/adaptation of [`moonraker-obico`](https://github.com/TheSpaghettiDetective/moonraker-obico)
-that connects a **stock Prusa MK4 (Buddy firmware) to a self-hosted Obico server
-over PrusaLink** — no OctoPrint, no Klipper, no printer-attached Raspberry Pi.
+A fork of [`moonraker-obico`](https://github.com/TheSpaghettiDetective/moonraker-obico)
+that connects a **stock Prusa printer (Buddy firmware, via PrusaLink)** to a
+self-hosted **Obico** server — no OctoPrint, no Klipper, no printer-attached Pi.
 
-## Why
+## How it works
 
-Obico gives you self-hosted, local-ML print-failure detection, but its clients
-(`obico-for-octoprint`, `moonraker-obico`) require OctoPrint or Klipper. A stock
-MK4 speaks neither — it exposes **PrusaLink** (HTTP API). Rather than bolt a Pi +
-OctoPrint onto the printer, we swap moonraker-obico's *printer-facing half* for a
-PrusaLink client and keep its *Obico-server-facing half* untouched.
+`moonraker-obico`'s printer-facing half (a Moonraker WebSocket client) is
+replaced by [`moonraker_obico/prusalink_conn.py`](moonraker_obico/prusalink_conn.py),
+which **polls the PrusaLink HTTP API** (`/api/v1/status`, `/api/v1/job`) and
+translates the response into the same Klipper/Moonraker-shaped status dict the
+agent already consumes. The entire Obico-server-facing half (`server_conn`,
+`PrinterState`, linking, webcam capture, tunnel) is unchanged — the connection
+object keeps `id='moonrakerconn'` so the event routing is identical.
 
-## Architecture
+Print control (pause/resume/cancel) maps to PrusaLink job endpoints. Klipper-only
+features with no PrusaLink equivalent (first-layer nozzle-cam AI, gcode terminal,
+jog/home/set-temp, layer stats) are no-ops — spaghetti/failure detection, the
+core feature, works fully.
 
+## Config
+
+`[prusalink]` section in `moonraker-obico.cfg` (replaces upstream `[moonraker]`):
+
+```ini
+[prusalink]
+host = 192.168.1.36        # printer IP (DHCP-reserved)
+port = 80
+api_key = <PrusaLink API key: Settings > Network > PrusaLink>
+# poll_interval = 2
+
+[server]
+url = http://obico-web.obico:3334   # in-cluster Obico server
+# auth_token = <set by the link step>
 ```
- MK4 (Buddy fw)            this agent (a pod)                Obico server (in-cluster)
- ┌──────────┐   PrusaLink   ┌───────────────────┐   WSS      ┌──────────────────┐
- │ PrusaLink │◀── HTTP poll ─│ prusalink_client  │──────────▶│ web/tasks/ml_api │
- │  :80      │──── pause ───▶│  → OctoPrint dict │  status   │  (YOLO detection)│
- └──────────┘                │ (unchanged Obico  │  + jpegs  └──────────────────┘
- DCS-930L cam ── snapshot ──▶│  server client)   │◀ commands  (pause/cancel back)
-```
 
-The seam is moonraker-obico's OctoPrint-flavoured status dict. As long as we emit
-that shape, the entire Obico-server side (`server_conn.py`, webcam capture, tunnel,
-Janus) is reused verbatim.
+## Run (container)
 
-## What changes vs. upstream moonraker-obico
+1. Link the printer to the Obico server (writes `auth_token` into the cfg):
+   `python -m moonraker_obico.link -c /opt/printer_data/config/moonraker-obico.cfg`
+   (enter the 6-digit code from the Obico dashboard → Link Printer).
+2. Run the agent: the image's default CMD runs `moonraker_obico.app`.
 
-| Upstream module | Fate |
-|---|---|
-| `moonraker_conn.py` (WS JSON-RPC) | **replaced** by `prusalink_obico/prusalink_client.py` (HTTP polling) |
-| `printer.py` parsers (`to_status`, state machine) | **rewritten** — parse PrusaLink JSON, emit same dict |
-| `passthru_targets.py` (job control) | pause/resume/cancel → PrusaLink job endpoints; jog/home/set-temp → unsupported |
-| `config.py` `[moonraker]` | → `[prusalink] host + api_key`; webcam auto-discovery dropped (manual URLs) |
-| `server_conn.py`, `webcam_*.py`, `tunnel.py`, `janus*` | **unchanged** |
-| `nozzlecam.py` (first-layer AI), layer macros, timelapse-pause | **dropped** (Klipper-macro-only, no PrusaLink path) |
+Image is built to `ghcr.io/ebarrere/prusalink-obico:latest` by GitHub Actions.
+Deployed in the homelab cluster (see the `obico` namespace manifests).
 
-Push→poll: Moonraker pushes over WS; PrusaLink only polls. Upstream already treats
-pushes as "go re-poll" and polls every 2s, so a poll loop reproduces its behaviour
-(cost: ~1-2s latency on state transitions — irrelevant for failure alerts).
+## Attribution
 
-## Status field mapping (verified against live MK4 fw 6.5.7 / PrusaLink 2.1.2)
-
-See `docs-captured-payloads.txt` for the raw idle + active-print responses.
-
-| Obico needs | PrusaLink source |
-|---|---|
-| print state/flags | `/api/v1/status .printer.state` → OctoPrint flags (see `prusalink_client._STATE_MAP`) |
-| progress %, time left/elapsed | `/api/v1/status .job.{progress,time_remaining,time_printing}` |
-| job file / id | `/api/v1/job .{id,file}` |
-| nozzle/bed temps | `/api/v1/status .printer.{temp_nozzle,target_nozzle,temp_bed,target_bed}` |
-| pause/resume/cancel | `PUT /api/v1/job/{id}/pause|resume`, `DELETE /api/v1/job/{id}` |
-| webcam frames | DCS-930L `/image.jpg` directly (Obico never got pixels from Moonraker) |
-
-## TODO
-- [ ] Graft `prusalink_client` into the upstream tree (replace `moonraker_conn`, rewire `app.py` event loop to poll).
-- [ ] Rewrite `printer.py` parsers to call `to_octoprint_status`.
-- [ ] Config: `[prusalink]` section; manual webcam URLs.
-- [ ] **Verify pause/resume method (PUT vs POST) + cancel against the live printer** (safe pause/resume test).
-- [ ] Rebuild the `current_print_ts` session identity off PrusaLink job `id`.
-- [ ] Dockerfile + GitHub Actions → `ghcr.io/ebarrere/prusalink-obico`.
-- [ ] k8s Deployment (in the homelab manifests repo) linking to the in-cluster Obico server.
+Derived from moonraker-obico (AGPL-3.0). See [LICENSE](LICENSE).
