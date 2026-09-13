@@ -33,6 +33,10 @@ _PRINT_STATE = {
 }
 _ACTIVE = ('PRINTING', 'PAUSED', 'ATTENTION', 'BUSY')
 
+# Reported for both heaters when the printer is unreachable, so the temperature
+# panel renders a value instead of spinning. Basement ambient ~20-25C.
+_ROOM_TEMP_C = 21.0
+
 
 class PrusaLinkConn:
     def __init__(self, config, sentry, on_event):
@@ -134,7 +138,12 @@ class PrusaLinkConn:
             self.sentry.captureException()
 
     def _offline_status(self):
-        # webhooks.state != 'ready' -> get_state_from_status() => Offline.
+        # PrusaLink unreachable (printer powered off). Keep the honest Offline
+        # state (webhooks.state != 'ready' -> printer shown Offline), but report a
+        # room-temp reading instead of 0.0 so the temperature panel has a value to
+        # render instead of spinning "Loading temperature..." forever. (The temp
+        # field must be numeric — it's round()'d and charted — so it can't be a
+        # literal "offline" string.) ~room temp ≈ what the thermistors read when off.
         return {
             'webhooks': {'state': 'offline', 'state_message': 'PrusaLink unreachable (printer powered off?)'},
             'print_stats': {
@@ -151,8 +160,8 @@ class PrusaLinkConn:
             },
             'toolhead': {'position': [0, 0, 0, 0], 'homed_axes': ''},
             'fan': {'speed': 0.0},
-            'extruder': {'temperature': 0.0, 'target': 0.0},
-            'heater_bed': {'temperature': 0.0, 'target': 0.0},
+            'extruder': {'temperature': _ROOM_TEMP_C, 'target': 0.0},
+            'heater_bed': {'temperature': _ROOM_TEMP_C, 'target': 0.0},
         }
 
     def _translate(self, status):
