@@ -48,14 +48,17 @@ class PrusaLinkConn:
 
     # --- lifecycle ------------------------------------------------------
     def block_until_klippy_ready(self):
-        while not self.shutdown:
-            try:
-                self._get('/api/version', timeout=5)
-                break
-            except Exception:
-                _logger.warning('PrusaLink not reachable yet at %s; retrying', self._base())
-                time.sleep(2)
-        # populates heater mapping (find_all_heaters) + webcam config (falls back to cfg)
+        # Do NOT block on printer reachability — PrusaLink runs on the printer,
+        # which may be powered off. If we blocked here, a restart while the
+        # printer is off would leave the agent stuck and never connect to Obico
+        # (plugin shows offline). update_moonraker_objects only needs our stubs
+        # (hardcoded heaters + cfg-file webcams), so proceed regardless; the poll
+        # loop reports the printer offline until PrusaLink comes back.
+        try:
+            self._get('/api/version', timeout=5)
+            _logger.info('PrusaLink reachable at startup')
+        except Exception:
+            _logger.info('PrusaLink not reachable at startup (printer off?); connecting to Obico anyway')
         self.app_config.update_moonraker_objects(self)
         run_in_thread(self._poll_loop)
 
