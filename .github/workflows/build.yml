@@ -17,10 +17,15 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # Immutable tag for Flux ImagePolicy (numerical sort on ts).
+      - id: tag
+        run: echo "tag=main-${GITHUB_SHA::7}-$(date +%s)" >> "$GITHUB_OUTPUT"
       - uses: docker/build-push-action@v6
         with:
           context: .
           push: true
-          tags: ghcr.io/ebarrere/prusalink-obico:latest
+          tags: |
+            ghcr.io/ebarrere/prusalink-obico:latest
+            ghcr.io/ebarrere/prusalink-obico:${{ steps.tag.outputs.tag }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
