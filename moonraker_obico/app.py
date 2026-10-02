@@ -290,9 +290,15 @@ class App(object):
                 )
                 return None
 
+        filename = printer_state.status.get('print_stats', {}).get('filename')
+        # PrusaLink fork: PRINTING is reported a few seconds before /api/v1/job has
+        # an id/file. Stay unregistered; the PRINTING branch retries next update.
+        if not filename:
+            printer_state.set_current_print_ts(-1)
+            return
+
         printer_state.set_current_print_ts(find_current_print_ts())
 
-        filename = printer_state.status.get('print_stats', {}).get('filename')
         file_metadata = self.moonrakerconn.api_get('server/files/metadata', raise_for_status=True, filename=filename)
         printer_state.current_file_metadata = file_metadata
 
