@@ -42,7 +42,7 @@ url = http://obico-web.obico:3334   # in-cluster Obico server
    (enter the 6-digit code from the Obico dashboard → Link Printer).
 2. Run the agent: the image's default CMD runs `moonraker_obico.app`.
 
-Image is built to `ghcr.io/ebarrere/prusalink-obico:latest` by GitHub Actions.
+Image is built to `ghcr.io/ebarrere/prusalink-obico:latest` (linux/amd64, linux/arm64) by GitHub Actions.
 Deployed in the homelab cluster (see the `obico` namespace manifests).
 
 ## Attribution
